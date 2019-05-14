@@ -1,4 +1,10 @@
-# `spatsoc` application paper
+# [spatsoc](spatsoc.robitalec.ca) application paper
+
+
+
+[![DOI](https://zenodo.org/badge/186687068.svg)](https://zenodo.org/badge/latestdoi/186687068)
+
+
 
 - Authors:
   - [Alec L. Robitaille](http://robitalec.ca)
@@ -12,7 +18,7 @@
 
 Data used for all figures and tables is the example data from `spatsoc`. 
 
-```
+```r
 # install.packages('spatsoc')
 
 library(data.table)
