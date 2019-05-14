@@ -16,7 +16,7 @@
 
 ### Data
 
-Data used for all figures and tables is the example data from `spatsoc`. 
+Data used for most figures and tables is the example data from `spatsoc`. The exception is the small mock dataset provided here (`data/example-pts.Rds`).
 
 ```r
 # install.packages('spatsoc')
