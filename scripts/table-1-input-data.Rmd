@@ -1,0 +1,64 @@
+---
+output: pdf_document
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage[osf,sc]{mathpazo}
+  - \usepackage{setspace}\doublespacing
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = file.path(dirname(inputFile), '../objects/Table1.pdf')) })
+---
+
+```{r knitropts, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, 
+                      warning = FALSE,
+                      eval = TRUE, 
+                      echo = FALSE)
+
+knitr::opts_knit$set(root.dir = '../')
+```
+
+
+```{r}
+### Table 1 ====
+
+### Packages ----
+pkgs <- c('data.table', 'gridExtra', 'ggplot2', 'spatsoc')
+p <- lapply(pkgs, library, character.only = TRUE)
+
+
+### Data ----
+DT <- fread('data/DT.csv')
+
+
+### Set theme ----
+font <- 'Futura'
+fontSize <- 24
+gridTheme <- gridExtra::ttheme_default(
+  base_family = font,
+  base_size = fontSize
+)
+
+
+### Build table ----
+tz <- 'America/St_Johns'
+
+DT <- DT[ID %chin% LETTERS[5:8]][, .SD[1:3], ID]
+
+DT[, datetime := as.POSIXct(datetime, tz = tz)]
+
+out <- DT[, .(ID, 
+							X = round(X), 
+							Y = round(Y), 
+							datetime = datetime + runif(.N, -60, 30))]
+
+invisible(group_times(out, 'datetime', '5 minutes'))
+
+setorder(out, timegroup, ID)
+
+### Output ----
+knitr::kable(
+	x = out[, .(ID, X, Y, datetime)],
+	format = 'latex',
+	booktabs = TRUE,
+	linesep = c("", "", "", "\\addlinespace"),
+)
+```
