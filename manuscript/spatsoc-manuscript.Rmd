@@ -1,0 +1,265 @@
+---
+title: "Conducting social network analysis with animal telemetry data: applications and methods using `spatsoc`"
+header-includes:
+  - \usepackage[osf,sc]{mathpazo}
+  - \usepackage{setspace}\doublespacing
+  - \usepackage{hyperref}
+documentclass: article
+output: pdf_document
+linkcolor: blue
+bibliography: "../bibliography/refs.bib"
+---
+
+```{r knitropts, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, 
+                      warning = FALSE,
+                      eval = FALSE, 
+                      echo = TRUE,
+                      fig.align = 'center')
+```
+
+Alec L. Robitaille ^a^, Quinn M.R. Webber ^b^ & Eric Vander Wal ^a^  ^b^
+
+^a^ Department of Biology, Memorial University of Newfoundland, St. John’s, NL, Canada
+
+^b^ Cognitive and Behavioural Ecology Interdisciplinary Program, Memorial University of Newfoundland, St. John’s, NL, Canada
+
+# Summary
+1. We present `spatsoc`: an R package for conducting social network analysis with animal telemetry data.
+
+1. Animal social network analysis is a method for measuring relationships between individuals to describe social structure. Proximity-based social networks are generated from animal telemetry data by grouping relocations temporally and spatially, using thresholds that are informed by the characteristics of the species and study system.
+
+1. `spatsoc` fills a gap in R packages by providing flexible functions, explicitly for animal telemetry data, to generate edge lists and gambit-of-the-group data, perform data-stream randomization and generate group by individual matrices. 
+
+1. The implications of `spatsoc` are that current users of animal telemetry or otherwise georeferenced data for movement or spatial analyses will have access to efficient and intuitive functions to generate social networks.
+
+# Introduction
+Animal social network analysis is a method for measuring the relationships between individuals to describe social structure [@Wey2008; @croft2008; @Pinter-Wollman2014; @Farine2015]. Association networks are built from a set of observed elements of social community structure and are useful to understand a variety of ecological and behavioural processes, including disease transmission, interactions between individuals and, community structure [@Pinter-Wollman2014]. Among the most common types of social network data collection is gambit-of-the-group, where individuals observed in the same group are assumed to be associating or interacting [@Franks2010]. Similar to gambit-of-the-group, proximity based social networks (PBSNs) are association networks based on close proximity between individuals [@Spiegel2016]. PBSNs rely on spatial location datasets that are typically acquired by georeferenced biologging methods such as radio-frequency identification tags, radiotelemetry, and Global Positioning System (GPS) devices (hereafter, animal telemetry). 
+
+Biologging using GPS devices allow simultaneous spatiotemporal sampling of multiple individuals in a group or population, thus generating large datasets which may otherwise be challenging to collect. The advent of biologging technology allows researchers to study individuals of species that range across large areas, migrate long distances, or spend time in inaccessible areas [@Cagnacci2010; @Cooke2013; @Hebblewhite2010]. Moreover, the recent increase in the number of studies using GPS telemetry to study movement ecology [@Kays2015; @Tucker2018] indicates the potential for a large number of existing datasets that may be retro-actively analyzed to test a priori hypotheses about animal social structure. As animal telemetry data have become more accessible and available at a fine scale, a number of techniques and methods have been developed to quantify various aspects of animal social structure [@webber2018]. These include dynamic interaction networks [@Long2014], PBSNs [@Spiegel2017] and the development of traditional randomization techniques to assess non-random structure of PBSNs constructed using animal telemetry data [@Spiegel2016]. Despite the recent increase in the number of studies using animal telemetry data and GPS relocation data [@webber2019], there is no comprehensive R package that generates PBSNs using animal telemetry data. 
+
+Here, we present `spatsoc` (v0.1.9), a package developed for the R programming language [@RCoreTeam2018] to (i) convert animal telemetry data into gambit-of-the-group format to build PBSNs, (ii) implement data-stream social network randomization methods of animal telemetry data [@Farine2015; @Spiegel2016], and (iii) provide flexible spatial and temporal grouping of individuals from large datasets. Animal telemetry data can be complex both temporally (e.g., data can be partitioned into monthly, seasonal or yearly segments) and spatially (e.g., subgroups, communities or populations). Functions in `spatsoc` were developed taking these complexities into account and provide users with flexibility to select relevant parameters based on the biology of their study species and systems and test the sensitivity of results across spatial and temporal scales.
+
+
+# Functions
+
+The `spatsoc` package provides functions for using animal telemetry data to generate PBSNs. Relocations are converted to gambit-of-the-group using grouping functions which can be used to build PBSNs. Alternatively, edge functions can be used to generate edge lists to build PBSNs. Raw data streams can be randomized where animal telemetry data is swapped between individuals at hourly or daily scales [@Farine2015], or within individuals using a daily trajectory method [@Spiegel2016]. 
+
+## Grouping
+Gambit-of-the-group data is generated from animal telemetry data where individuals are grouped based on temporal and spatial overlap. The `spatsoc` package provides one temporal grouping function: 
+
+1. `group_times` groups animal telemetry relocations into time groups (Figure 1). The function accepts date time formatted data and a temporal threshold argument. The temporal threshold argument allows users to specify a time window within which relocations are grouped, for example: 5 minutes, 2 hours or 10 days.
+
+`group_times` compares the date and time of each relocation to a regular interval defined by the temporal threshold. For example, a five minute threshold will compare the date and time of each relocation to five minute time intervals throughout each day. Each relocation is grouped to the nearest time interval at a maximum temporal distance of half the threshold before or past the time interval. 
+
+The `spatsoc` package provides three spatial grouping functions:
+
+1. `group_pts` measures the geographic distance between animal telemetry relocations within each time group based on a spatial threshold provided by the user (Figure 2). A distance matrix is constructed to measure the distance between all individuals. The threshold is used to binarize the distance matrix and the connected components are labelled to form spatial groups. The connected components represent individuals within the threshold distance from one another. We apply the chain rule [@croft2008] where three or more individuals that are all within the defined threshold distance of at least one other individual are considered in the same group. For point based spatial grouping with a distance threshold that does not use the chain rule, see `edge_dist` below.
+
+1. `group_lines` groups overlapping movement trajectories generated from animal telemetry data (Figure 3). Movement trajectories for each individual within each time group, e.g. 8 hours, 1 day or 20 days, are generated and grouped based on spatial overlap of lines produced from trajectories. If a spatial distance threshold is provided, trajectories are buffered by this distance before spatial overlap.
+
+1. `group_polys` generates and groups overlapping home ranges using kernel utilization distributions or minimum convex polygons generated in `adehabitatHR` of individuals and optionally returns a measure of proportional area overlap (Figure 4). Home ranges are generated for each individual in each timegroup, providing efficient comparison of home ranges through time, e.g. multiple days, seasons or years. 
+
+For spatial grouping functions, individuals that are not within the distance threshold, or that do not overlap with any other individuals are assigned to a group on their own.
+
+## Edge lists
+The `spatsoc` package provides two edge list generating functions:
+
+1. `edge_nn` calculates the nearest neighbour to each individual within each time group (Figure 5). If the optional distance threshold is provided, it is used to limit the maximum distance between neighbours. `edge_nn` returns an edge list of each individual and their nearest neighbour. 
+
+1. `edge_dist` calculates the geographic distance between animal telemetry relocations within each time group and returns all 
+paired relocations within the spatial threshold (Figure 5). `edge_dist` uses a distance matrix like `group_pts`, but, in contrast, does not use the chain rule to group relocations. Instead, it returns an edge list of each individual and all others within the spatial distance threshold. 
+
+For edge list generating functions, individuals that are not within the distance threshold, or that do not have a nearest neighbour (or within the distance threshold if provided), are returned as NA.
+
+
+## Randomizations
+Randomization procedures in social network analysis are important to test assumptions of spatial and temporal non-independence of social association data [@Farine2015]. Data-stream randomization is the recommended randomization technique for social network users [@Farine2015] and involves swapping individuals and group observations within or between temporal groups and individuals [@farine2017]. Animal telemetry data has inherent temporal structure and is well suited to randomization methods. The `spatsoc` package provides three data-stream randomization methods:
+
+1. Step - randomizes identities of animal telemetry relocations between individuals within each time step.
+1. Daily - randomizes daily animal telemetry relocations between individuals, preserving the order of time steps. 
+1. Trajectory - randomizes daily trajectories generated from animal telemetry relocations within individuals [@Spiegel2016].
+
+The `randomizations` functions return the input data with random fields appended, ready to use by the grouping functions or to build social networks. Step and daily methods return a "randomID" field that can be used in place of the ID field and the trajectory method returns a "randomDatetime" that can be used in place of the datetime field. The `randomizations` function in `spatsoc` allow users to split randomizations between spatial or temporal subgroups to ensure that relocations are only swapped between or within relevant individuals.
+
+# Using `spatsoc` in social network analysis
+`spatsoc` is integrated with social network analysis in R to generate and randomize PBSNs. First, users will generate temporal groups with `group_times`. Next, users will generate PBSNs from spatial groups:
+
+1. Generate gambit-of-the-group data with spatial grouping functions (`group_pts`, `group_lines` and `group_polys`)
+1. Generate group by individual matrices (`get_gbi`)
+1. PBSN data-stream randomization (`randomizations`)
+    
+or edge lists:
+
+1. Generate edge lists (`edge_nn` and `edge_dist`)
+1. PBSN data-stream randomization (`randomizations`)
+
+Before spatiotemporal grouping or edge list generation, users should first determine relevant temporal and spatial grouping thresholds.
+
+## Selecting and evaluating spatial and temporal thresholds
+Functions provided by `spatsoc` emphasize flexibility to allow users the ability to modify functions to better suit their specific use case. The temporal threshold argument of `group_times` accepts units of minutes, hours or days to generate temporal groups at different scales. The spatial threshold defines the distance used to generate spatial groups and edge lists. The spatial and temporal thresholds used for generating PBSNs with `spatsoc` must be considered carefully and we recommend the thresholds used are based on the nuances of the animal telemetry data, study species, system and specific research questions. Despite this, there are no hard and fast rules for selecting thresholds for spatiotemporal grouping (but see below for recommendations). Evaluating candidate thresholds is recommended and has been shown to provide valuable insights for selecting temporal [@psorakis2015] and spatial [@davis2018] thresholds.
+
+It is important that the temporal threshold matches the spatial grouping or edge list function used. In the case of point based spatial grouping and edge list generating functions, the temporal threshold must be at least less than the fix rate of the telemetry device. If not, an individual may have multiple relocations in a timegroup and potentially grouped with itself. The temporal threshold for these functions will likely be in units of minutes or hours. For line and polygon based spatial grouping, the temporal threshold will necessarily encompass multiple relocations for each individual. Lines must be built with at least two points and there are specific requirements for number and distribution of relocations for building home ranges [@laver2008; @cumming2012]. 
+
+While, the spatial and temporal thresholds are informed by the biology of the study species and research questions, there are a number of behavioural, morphological, and ecological factors that could influence threshold distance. For example, these include, but are not limited to, body size, daily movement rate, communication distance [@cameron2005], gregariousness [@godde2013], and degree of fission-fusion [@haddadi2011]. Some empirical examples from the literature include five body lengths for white-faced capuchin monkeys [*Cebus capucinus*, @crofoot2011], within arm’s reach for chimpanzees [*Pan troglodytes*, @fraser2008], 2m for sleepy lizards [*Tiliqua rugosa*, @leu2010], 100m for bison [*Bison bison*, @merkle2015]. @leu2010 also measured the median GPS device precision to estimate an effective range of 2-26m when using a spatial threshold of 2m. In summary, it is clear that smaller bodied species have shorter threshold distances than larger bodied species, while highly active and gregarious species, including most primates, tend to also have shorter threshold distances. 
+
+Finally, `spatsoc` can be used to compare networks generated with different grouping methods across a range of spatial and temporal thresholds. @davis2018 compared association networks generated from wild baboon (*Papio anubis*) telemetry data using spatial thresholds with the chain rule (as in `group_pts`), spatial thresholds without the chain rule (as in `edge_dist`) and nearest neighbours (as in `edge_nn`). For example, @castles2014 compared proximity networks of chacma baboons (*Papio ursinus*) built with the chain rule (as in `group_pts`) and without (as in `edge_dist`) and using nearest neighbours with a maximal distance (as in `edge_nn`). 
+
+## Generating networks
+```{r, eval=TRUE, echo = FALSE}
+library(spatsoc); library(data.table)
+DT <- fread(system.file("extdata", "DT.csv", package = "spatsoc"))
+```
+
+
+Here, we will provide an example of point based spatial grouping with `spatsoc`'s example caribou telemetry data (Table 1). The data consists of `r DT[, uniqueN(ID)]` individuals with relocations recorded every 2 hours. The coordinates "X" and "Y" are in units of meters and the coordinate system is UTM Zone 21N. 
+
+In this case, we will use a temporal threshold of 5 minutes and a spatial distance threshold of 50 m given the size and behaviour of the study species [@Melissa]. The combination of spatial and temporal thresholds means that any individuals within 50 m of each other within 5 minutes will be assigned to the same group. Please note that `spatsoc` is designed to work with the `data.table` package, specifically in the following example for reading the input data and casting the datetime column from character to date time formatted, as well as internally in `spatsoc` functions. 
+
+```{r}
+# Load packages
+library(spatsoc)
+library(data.table)
+
+# Import spatsoc's example data
+DT <- fread(system.file("extdata", "DT.csv", package = "spatsoc"))
+
+# Cast datetime column to POSIXct
+DT[, datetime := as.POSIXct(datetime)]
+
+# Temporal groups
+group_times(
+  DT, 
+  datetime = 'datetime', 
+  threshold = '5 minutes'
+)
+
+# Spatial groups using 'timegroup' generated by group_times 
+group_pts(
+  DT,
+  threshold = 50,
+  id = 'ID',
+  coords = c('X', 'Y'),
+  timegroup = 'timegroup'
+)
+```
+
+After the temporal and spatial grouping is completed with `group_times` and `group_pts`, a group by individual matrix is generated (described by @Farine2015). A group by individual matrix forms columns of individuals and rows of groups and a boolean will indicate membership of each individual to a group.
+
+```{r}
+gbi <- get_gbi(
+  DT, 
+  group = 'group', 
+  id = 'ID'
+)
+```
+
+After generating the group by individual matrix, it is passed directly to `asnipe`, the animal social network package [@Farine2013], to generate a proximity based social network. Note, in this example we use the simple ratio index (SRI) as an association index because all individuals are correctly identified and observed at each relocation event (i.e. the equivalent to an observational period for networks generated using focal observations).
+
+```{r}
+library(asnipe)
+net <- get_network(
+  gbi, 
+  data_format = "GBI", 
+  association_index = "SRI"
+)
+```
+
+## Data-stream randomization
+To perform network data-stream permutations, the `randomizations` function is used to permute spatial and temporal groupings and rebuild PBSNs at each iteration. In this example, we use the "step" method to randomize between individuals at each time step for 500 iterations. The output `randStep` contains the observed and randomized data and can subsequently be used to generate group by individual matrices, networks and calculate network metrics. An extended form of this example is provided in the vignette "Using spatsoc in social network analysis" (see Resources). 
+
+```{r}
+# Step type randomizations
+randStep <- randomizations(
+   DT,
+   type = 'step',
+   id = 'ID',
+   group = 'group',
+   datetime = 'timegroup',
+   iterations = 500,
+   splitBy = 'year'
+)
+```
+
+The `splitBy` argument can be used in the `randomizations` function (as well as edge list generating and spatial grouping functions) to delineate spatial, e.g. groups or populations, or temporal segments of data, e.g. weekly, monthly, or yearly, by which PBSNs will be generated. For example, in large datasets with individuals in two distinct populations with data over many years, users may use the splitBy argument to generate PBSNs for each population-by-year combination as opposed to generating each PBSN separately.
+
+
+# Implications
+`spatsoc` represents a novel integration of tools for generating PBSNs from animal telemetry data. The grouping and randomization functions allow users to efficiently and rapidly generate a large number PBSNs within the spatsoc environment. `spatsoc` will be of interest and use to a wide range of behavioural ecologists who either already use social network analysis or those who typically work with GPS relocation data but are interested in becoming social network users. We advocate for the use of spatsoc in conjunction with the most recent ‘how to’ on social network analysis [@Farine2015] as well as other R packages, such as `asnipe` [@Farine2013] and `igraph` [@Csardi2006], to facilitate greater sharing of computational and statistical efficiencies and ideas for users of social network analysis.
+
+
+
+# Resources
+`spatsoc` is a free and open source software available on CRAN (stable release) and at [https://github.com/ropensci/spatsoc](https://github.com/ropensci/spatsoc) (development version). It is licensed under the GNU General Public License 3.0. `spatsoc` depends on other `R` packages: `data.table` [@Dowle2018], `igraph` [@Csardi2006], `rgeos` [@Bivand2018], `sp` [@Bivand2013] and `adehabitatHR` [@Calenge2006]. Documentation of all functions and detailed vignettes (including "Introduction to spatsoc", "Frequently asked questions" and "Using spatsoc in social network analysis") can be found on the companion website at [spatsoc.robitalec.ca](http://spatsoc.robitalec.ca).  Development of `spatsoc` welcomes contribution of feature requests, bug reports, and suggested improvements through the issue board at [https://github.com/ropensci/spatsoc/issues](https://github.com/ropensci/spatsoc/issues). 
+
+
+# Future directions
+In the future, we intend on producing vignettes which highlight the role of spatsoc for generating social networks for other types of data collection commonly used in social network analysis. For example, data collected using passive-integrated transponders [e.g. @aplin2013] is increasingly being used to generate animal social networks [@webber2019] and spatsoc could represent a novel and computationally efficient way to generate social networks for large PIT-tag datasets. The basic principles of spatsoc and grouping functions can be applied to other data types, including PIT-tags, as long as both spatial and temporal information are known. We are also developing additional grouping methods including dyadic grouping and clustering methods. The dyadic grouping method will extract multiple simultaneous relocations for a dyad through time [e.g. for similar application see @lesmerises2018] and will have applications for collective and coordinated movement of dyads. Meanwhile, the clustering method will identify spatially and temporally clustered relocations for individuals, or groups of individuals, and could have applications for identifying preferred habitats for groups as well as locations of scavenging or predation [e.g. for similar applications see @knopff2009; @kermish2018; @cristescu2014].
+
+
+# Acknowledgements
+We thank all members of the Wildlife Evolutionary Ecology Lab, including Juliana Balluffi-Fry, Sana Zabihi-Seissan, Erin Koen, Michel Laforge, Christina Prokopenko, Julie Turner, Levi Newediuk, Richard Huang and Chris Hart for their comments on previous versions of this manuscript. We thank Michel Robitaille for comments on the French version of the abstract. We thank Tyler Bonnell, Martin Leclerc and Shane Frank for testing the package ahead of its release as well as two anonymous reviewers for comments that greatly improved the manuscript and the package. We also thank the rOpenSci organization for their package on-boarding process including rOpenSci reviewers, Priscilla Minotti and Filipe Teixeira, and editor, Lincoln Mullen, for their code review, which contributed to improving this package. Funding for this study was provided by a Vanier Canada Graduate Scholarship to QMRW and a NSERC Discovery Grant to EVW.
+
+
+# Author contributions
+ALR, QMRW, and EVW conceived of the original package concept. ALR developed the package. ALR and QMRW drafted the manuscript and all co-authors contributed critically to the drafts and gave final approval for publication.
+
+# Data accessibility
+All data and code used to produce figures are available on GitHub at https://github.com/robitalec/spatsoc-application-paper and on Zeonodo at https://doi.org/10.5281/zenodo.2824869. The data is also included with the package and can be imported with:
+
+```{r}
+library(data.table)
+DT <- fread(system.file("extdata", "DT.csv", package = "spatsoc"))
+```
+
+# Citation
+Users of `spatsoc` should cite this article directly. A formatted citation and BibTex entry is provided in `R`:
+
+```{r, eval=FALSE, echo=TRUE}
+citation('spatsoc')
+```
+
+\newpage
+
+# References
+
+<div id="refs"></div>
+
+
+\newpage
+
+# Table captions
+
+* Table 1
+
+Table 1: expected data input for spatsoc; the relocations for each individual with a timestamp column. These rows are a subset from the package's example caribou movement data of 10 individuals collected every 2 hours. The individual identifier ("ID") and timestamp ("datetime") columns are character type and the coordinates ("X" and "Y") are numeric. This example shows the first three relocations for four individuals (E, F, G, and H).
+
+
+
+
+\newpage
+
+
+
+# Figure Captions
+
+* Figure 1
+
+Figure 1: temporal grouping with `group_times`. A) A full temporal data stream of regular fixes at two hour intervals for four individuals (example data described in Table 1). B) An example showing the temporal deviation around the set fix rate. Temporal grouping with a threshold of five minutes groups these relocations to the nearest five minute interval. Times within the temporal threshold, e.g. five minutes in this case, are grouped together. C) temporal grouping with a threshold of eight hours showing the relocations being grouped to the nearest eight hour interval. D) temporal grouping with a threshold of ten days with all relocations being grouped in ten day chunks.
+
+
+* Figure 2
+
+Figure 2: point based spatial grouping with `group_pts`. A) Three relocations for four individuals in three time groups (example data described in Table 1). The relocation in the second timegroup for all individuals is buffered, to depict the distance threshold (in this case 50m) to generate spatial groups. The temporal threshold used is five minutes (see Figure 1 B). B) A distance matrix of relocations for all four individuals at timegroup 2 where highlighted rows are pairwise distances that meet the user defined criteria for spatial grouping, i.e. are less than the spatial threshold. C) The connected components showing the chain rule implementation of point based distance grouping with `group_pts`. The connected components show individuals E, F and G grouped (group 2 coloured blue), despite individual F and G being further apart than the spatial threshold, since they were both within the threshold distance from E. Individual H is assigned a group on their own, since they are not within the spatial threshold of any other individuals (group 9 coloured pink). D) Output spatiotemporal groups from `group_pts` showing individuals ("ID"), timegroups ("timegroup") and spatiotemporal groups ("group"). 
+
+* Figure 3
+
+Figure 3: line based spatial grouping with `group_lines`. A) Three daily trajectories for four individuals generated using a time threshold of one day (see Figure 1 C) and `group_lines` (example data described in Table 1). A spatial threshold of 50m is used, represented by the buffered portions around each individual's trajectory on the second day, or timegroup 2. B) Output spatial groups from `group_pts` showing individuals ("ID"), timegroups ("timegroup") and spatiotemporal groups ("group").
+
+* Figure 4
+
+Figure 4: home range based spatial grouping with `group_polys`. A) Home ranges for four individuals generated using a temporal threshold of 30 days (see Figure 1 D). `group_pts` generates and groups overlapping home ranges of individuals. It either returns B) binary overlap or C) a measure of proportional area containing the area of overlap ($km^2$) and proportion of overlap among individuals. 
+
+* Figure 5
+
+Figure 5: Edge list generating functions `edge_nn` and `edge_dist`. Panels show relocations and output edge lists for four individuals (E, F, G, H) for one timegroup from example data described in Table 1. Note the distances between individuals shown here is presented in Figure 2 panel B. A) and B) show edges generated with `edge_dist`. Edges between individuals are generated if the distance between relocations is within the spatial threshold. C) and D) show edges generated with `edge_nn`. Edges are created by identifying the nearest neighbour to each individual in each timegroup. Optionally, users may specify a maximum distance within which to consider a nearest neighbour relevant. 
