@@ -1,4 +1,4 @@
-# [spatsoc](spatsoc.robitalec.ca) application paper
+# [spatsoc](http://spatsoc.robitalec.ca/) application paper
 
 
 
