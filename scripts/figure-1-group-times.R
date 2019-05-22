@@ -132,7 +132,7 @@ fig1 <-
 
 
 ggsave(
-	filename = 'figures/Figure1.pdf',
+	filename = 'objects/Figure1.pdf',
 	plot = fig1,
 	width = 220,
 	height = 120,
