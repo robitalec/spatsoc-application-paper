@@ -1,4 +1,4 @@
-# [spatsoc](http://spatsoc.robitalec.ca/) application paper
+# Conducting social network analysis with animal telemetry data: applications and methods using spatsoc
 
 
 
@@ -10,6 +10,10 @@
   - [Alec L. Robitaille](http://robitalec.ca)
   - [Quinn M.R. Webber](https://qwebber.weebly.com/)
   - [Eric Vander Wal](http://weel.gitlab.io)
+
+
+`spatsoc` [paper](https://doi.org/10.1111/2041-210X.13215), [website](http://spatsoc.robitalec.ca/) and [repository](https://github.com/ropensci/spatsoc). 
+
 
 ### Summary
 1. We present `spatsoc`: an R package for conducting social network analysis with animal telemetry data.
